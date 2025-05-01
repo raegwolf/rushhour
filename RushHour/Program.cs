@@ -69,7 +69,7 @@ class Program
 
     class Board
     {
-        public int[] Blocks { get; private set; } = new int[BOARD_CX * BOARD_CY];
+        public byte[] Blocks { get; private set; } = new byte[BOARD_CX * BOARD_CY];
 
         public Board? ParentBoard { get; private set; } = null;
 
@@ -77,17 +77,7 @@ class Program
 
         public override string ToString()
         {
-            var sb = new StringBuilder();
-            for (var y = 0; y < BOARD_CY; y++)
-            {
-                for (var x = 0; x < BOARD_CX; x++)
-                {
-                    sb.Append(Blocks[y * BOARD_CX + x].ToString("X"));
-                }
-                sb.Append("|");
-            }
-
-            return sb.ToString();
+            return Convert.ToBase64String(Blocks);
         }
 
         public Board(Board parentBoard)
@@ -118,81 +108,6 @@ class Program
     }
 
     /// <summary>
-    /// Attempts to solve the game and returns the best solution (i.e. the one with the
-    /// fewest steps taken)
-    /// </summary>
-    /// <param name="initialBoard"></param>
-    /// <returns></returns>
-    static List<Board> SolveGame(Board initialBoard)
-    {
-        var stack = new Stack<Board>();
-
-        stack.Push(initialBoard);
-
-        List<Board> bestSolution = new List<Board>();
-
-        List<Board> encountered = new List<Board>();
-
-        var p = 0;
-        while (stack.Count() > 0)
-        {
-            var board = stack.Pop();
-            encountered.Add(board);
-
-            if (IsSolved(board))
-            {
-                var testSolution = GetPrunedSteps(board);
-                Console.WriteLine($"Found solution using {testSolution.Count()} moves, stack is {stack.Count}.");
-                if ((bestSolution.Count() == 0) || (testSolution.Count() < bestSolution.Count()))
-                {
-                    bestSolution = testSolution;
-                }
-                continue;
-            }
-
-            var newBoards = EnumerateNextBoards(board);
-
-            ProcessBoards(stack, encountered, newBoards);
-
-            p++;
-            if ((p % 10000) == 0)
-            {
-                Console.WriteLine($"Processed {p} unique states, Stack {stack.Count()}.");
-            }
-        }
-
-        return bestSolution;
-
-    }
-
-    /// <summary>
-    /// Iterates throguh a set of potential boards and loads them into the stack if they are a
-    /// unique state (i.e. a configuration that has not yet been seen)
-    /// </summary>
-    /// <param name="stack"></param>
-    /// <param name="encountered"></param>
-    /// <param name="newBoards"></param>
-    static void ProcessBoards(Stack<Board> stack, List<Board> encountered, IEnumerable<Board> newBoards)
-    {
-        foreach (var newBoard in newBoards)
-        {
-            // if the board is identical to an antecedent, exclude it
-            if (IsBoardIdenticalToAntecedent(newBoard))
-            {
-                continue;
-            }
-
-            // if the boad is identical to any other board we've already seen, exclude it
-            if (IsBoardIdenticalTo(newBoard, encountered))
-            {
-                continue;
-            }
-
-            stack.Push(newBoard);
-        }
-    }
-
-    /// <summary>
     /// Returns a Board object from a text representation of a board
     /// </summary>
     /// <param name="boardText"></param>
@@ -213,12 +128,87 @@ class Program
                 {
                     throw new Exception("Invalid vehicle.");
                 }
-                board.Blocks[y * BOARD_CX + x] = n;
+                board.Blocks[y * BOARD_CX + x] = (byte)n;
             }
         }
 
         return board;
 
+    }
+
+    /// <summary>
+    /// Attempts to solve the game and returns the best solution (i.e. the one with the
+    /// fewest steps taken)
+    /// </summary>
+    /// <param name="initialBoard"></param>
+    /// <returns></returns>
+    static List<Board> SolveGame(Board initialBoard)
+    {
+        var stack = new Stack<Board>();
+
+        stack.Push(initialBoard);
+
+        var bestSolution = new List<Board>();
+
+        var encountered = new HashSet<string>();
+
+        var p = 0;
+        while (stack.Count() > 0)
+        {
+            var board = stack.Pop();
+            encountered.Add(board.ToString());
+
+            if (IsSolved(board))
+            {
+                var testSolution = GetPrunedSteps(board);
+                Console.WriteLine($"Found solution using {testSolution.Count()} moves.");
+                if ((bestSolution.Count() == 0) || (testSolution.Count() < bestSolution.Count()))
+                {
+                    bestSolution = testSolution;
+                }
+                continue;
+            }
+
+            var newBoards = EnumerateNextBoards(board);
+
+            ProcessBoards(stack, encountered, newBoards);
+
+            p++;
+            if ((p % 10000) == 0)
+            {
+                Console.WriteLine($"Processed {p} unique states, stack depth is {stack.Count()}.");
+            }
+        }
+
+        return bestSolution;
+
+    }
+
+    /// <summary>
+    /// Iterates throguh a set of potential boards and loads them into the stack if they are a
+    /// unique state (i.e. a configuration that has not yet been seen)
+    /// </summary>
+    /// <param name="stack"></param>
+    /// <param name="encountered"></param>
+    /// <param name="newBoards"></param>
+    static void ProcessBoards(Stack<Board> stack, HashSet<string> encountered, IEnumerable<Board> newBoards)
+    {
+        foreach (var newBoard in newBoards)
+        {
+            // if the board is identical to an antecedent, exclude it
+            if (IsBoardIdenticalToAntecedent(newBoard))
+            {
+                continue;
+            }
+
+            // if the boad is identical to any other board we've already seen, exclude it
+            if (IsBoardIdenticalTo(newBoard, encountered))
+            {
+                continue;
+            }
+
+            stack.Push(newBoard);
+        }
     }
 
     /// <summary>
@@ -429,16 +419,9 @@ class Program
     /// <param name="self"></param>
     /// <param name="others"></param>
     /// <returns></returns>
-    static bool IsBoardIdenticalTo(Board self, List<Board> others)
+    static bool IsBoardIdenticalTo(Board self, HashSet<string> others)
     {
-        foreach (var other in others)
-        {
-            if (IsBoardIdenticalTo(self, other))
-            {
-                return true;
-            }
-        }
-        return false;
+        return others.Contains(self.ToString());
     }
 
     /// <summary>
@@ -449,7 +432,8 @@ class Program
     /// <returns></returns>
     static bool IsBoardIdenticalTo(Board board1, Board board2)
     {
-        // expect that for an array this small, this is faster than options like SequenceEqual
+        // Linq's SequenceEqual is 50% slower for arrays this size.
+        // an unsafe array compare also achieved slighly worse perf
         var b1 = board1.Blocks;
         var b2 = board2.Blocks;
         for (var i = 0; i < BOARD_CY * BOARD_CX; i++)
