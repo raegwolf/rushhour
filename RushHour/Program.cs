@@ -1,13 +1,23 @@
 ﻿
 using System;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 
 class Program
 {
-    static string[] INITIAL_BOARD_TEXT = {
+    static string[] INITIAL_BOARD_TEXT = { // layout card 32 (highest official solve steps)
+        "OOOAPQ",
+        "BCCAPQ",
+        "B XXPQ",
+        "DDE   ",
+        " FEGG ",
+        " FHHII"
+    };
+
+    static string[] INITIAL_BOARD_TEXT_38 = { // layout card 38 (seems hard)
         "OABBC ",
         "OAD CP",
         "O DXXP",
@@ -16,11 +26,21 @@ class Program
         "HHFII "
     };
 
+    static string[] INITIAL_BOARD_TEXT_40 = { // layout card 40 (last card)
+        "ABBOOO",
+        "A CCD ",
+        "XXE D ",
+        "FFEGGP",
+        " HHI P",
+        "QQQI P"
+    };
+
     const string VEHICLE_CODES = " XOABCDPQEFGHI";
 
     const int VEHICLE_NONE = 0;
     const int VEHICLE_TAXI = 1;
-    const int VEHICLE_OTHER_BASE = 2;
+    const int VEHICLE_MAX = 20;
+
 
     // when we have red taxi at these coordinates we've solved the puzzle
     const int ESCAPE_X = 5;
@@ -29,23 +49,6 @@ class Program
 
     const int BOARD_CX = 6;
     const int BOARD_CY = 6;
-
-    static ConsoleColor[] COLOURS ={
-        ConsoleColor.Black, // empty
-        ConsoleColor.Red, // taxi
-        ConsoleColor.Yellow,
-        ConsoleColor.Green,
-        ConsoleColor.Cyan,
-        ConsoleColor.Blue,
-        ConsoleColor.DarkCyan,  // pink
-        ConsoleColor.Magenta,
-        ConsoleColor.Blue,
-        ConsoleColor.DarkMagenta,
-        ConsoleColor.Gray,
-        ConsoleColor.DarkGray, // brown
-        ConsoleColor.DarkGreen,
-        ConsoleColor.DarkYellow
-    };
 
     static readonly string[] ANSI_BG_COLOURS = {
         "\u001b[40m", // Black (background)
@@ -66,9 +69,9 @@ class Program
 
     class Board
     {
-        public int[,] Blocks { get; private set; } = new int[BOARD_CX, BOARD_CY];
+        public int[] Blocks { get; private set; } = new int[BOARD_CX * BOARD_CY];
 
-        public Board ParentBoard { get; private set; } = null;
+        public Board? ParentBoard { get; private set; } = null;
 
         public int Step { get; private set; } = 0;
 
@@ -79,7 +82,7 @@ class Program
             {
                 for (var x = 0; x < BOARD_CX; x++)
                 {
-                    sb.Append(Blocks[x, y].ToString("X"));
+                    sb.Append(Blocks[y * BOARD_CX + x].ToString("X"));
                 }
                 sb.Append("|");
             }
@@ -103,9 +106,15 @@ class Program
 
         RenderBoard(0, initial);
 
+        var stopwatch = Stopwatch.StartNew();
+
         var solution = SolveGame(initial);
 
+        stopwatch.Stop();
+
         RenderSolution(solution);
+
+        Console.WriteLine($"Solved in {stopwatch.ElapsedMilliseconds / 1000.00}s.");
     }
 
     /// <summary>
@@ -116,12 +125,11 @@ class Program
     /// <returns></returns>
     static List<Board> SolveGame(Board initialBoard)
     {
-
         var stack = new Stack<Board>();
 
         stack.Push(initialBoard);
 
-        List<Board> solution = new List<Board>();
+        List<Board> bestSolution = new List<Board>();
 
         List<Board> encountered = new List<Board>();
 
@@ -134,10 +142,10 @@ class Program
             if (IsSolved(board))
             {
                 var testSolution = GetPrunedSteps(board);
-                Console.WriteLine($"Found solution using {testSolution.Count()} moves.");
-                if ((solution.Count() == 0) || (testSolution.Count() < solution.Count()))
+                Console.WriteLine($"Found solution using {testSolution.Count()} moves, stack is {stack.Count}.");
+                if ((bestSolution.Count() == 0) || (testSolution.Count() < bestSolution.Count()))
                 {
-                    solution = testSolution;
+                    bestSolution = testSolution;
                 }
                 continue;
             }
@@ -149,11 +157,11 @@ class Program
             p++;
             if ((p % 10000) == 0)
             {
-                Console.WriteLine($"Iteration {p}, Stack {stack.Count()}");
+                Console.WriteLine($"Iteration {p}, Stack {stack.Count()}, Encountered {encountered.Count} unique states.");
             }
         }
 
-        return solution;
+        return bestSolution;
 
     }
 
@@ -191,7 +199,6 @@ class Program
     /// <returns></returns>
     static Board CreateInitialBoard(string[] boardText)
     {
-
         var board = new Board(null);
 
         for (var y = 0; y < BOARD_CY; y++)
@@ -206,7 +213,7 @@ class Program
                 {
                     throw new Exception("Invalid vehicle.");
                 }
-                board.Blocks[x, y] = n;
+                board.Blocks[y * BOARD_CX + x] = n;
             }
         }
 
@@ -221,13 +228,13 @@ class Program
     /// <returns></returns>
     static IEnumerable<Board> EnumerateNextBoards(Board board)
     {
-        var encountered = new List<int>();
+        var encountered = new bool[VEHICLE_MAX];
 
         for (int y = 0; y < BOARD_CY; y++)
         {
             for (int x = 0; x < BOARD_CX; x++)
             {
-                var current = board.Blocks[x, y];
+                var current = board.Blocks[y * BOARD_CX + x];
                 if (current == VEHICLE_NONE)
                 {
                     // skip empty blocks
@@ -235,18 +242,20 @@ class Program
                 }
 
                 // if we've already processed this vehicle, skip
-                if (encountered.Contains(current))
+                if (encountered[current])
                 {
                     continue;
                 }
-                encountered.Add(current);
+                encountered[current] = true;
 
                 // determine whether to scan to the left/right or updards/downwards.
                 // all vehicles are at least 2 blocks long and since we are scanning top down
                 // and left right, we know whether the vehicle is horizontal or vertical
-                // by testing the block to the right and the block below
-                var dx = x + 1 < BOARD_CX ? (board.Blocks[x + 1, y] == current ? 1 : 0) : 0;
-                var dy = y + 1 < BOARD_CY ? (board.Blocks[x, y + 1] == current ? 1 : 0) : 0;
+                // by testing the block to the right and the block below. note that this 
+                // just determines the orientation of the vehicle not whether there
+                // is actually space for it to move
+                var dx = x + 1 < BOARD_CX ? (board.Blocks[y * BOARD_CX + x + 1] == current ? 1 : 0) : 0;
+                var dy = y + 1 < BOARD_CY ? (board.Blocks[(y + 1) * BOARD_CX + x] == current ? 1 : 0) : 0;
 
                 // test for delta +1 - i.e. right or down
                 var canMovePos = CanMove(board, current, x, y, dx, dy);
@@ -288,7 +297,7 @@ class Program
         var adjacent = vehicle;
         while (adjacent == vehicle)
         {
-            adjacent = board.Blocks[x, y];
+            adjacent = board.Blocks[y * BOARD_CX + x];
             if (adjacent == VEHICLE_NONE)
             {
                 return true;
@@ -322,14 +331,14 @@ class Program
         {
             for (var x = 0; x < BOARD_CX; x++)
             {
-                var isChanged = board1.Blocks[x, y] != board2.Blocks[x, y];
+                var isChanged = board1.Blocks[y * BOARD_CX + x] != board2.Blocks[y * BOARD_CX + x];
                 if (!isChanged)
                 {
                     continue;
                 }
 
-                var vehicle1 = board1.Blocks[x, y];
-                var vehicle2 = board2.Blocks[x, y];
+                var vehicle1 = board1.Blocks[y * BOARD_CX + x];
+                var vehicle2 = board2.Blocks[y * BOARD_CX + x];
 
                 var testVehicle = vehicle1 == VEHICLE_NONE ? vehicle2 : vehicle1;
 
@@ -359,7 +368,7 @@ class Program
     /// <returns></returns>
     static bool IsSolved(Board board)
     {
-        return board.Blocks[ESCAPE_X, ESCAPE_Y] == VEHICLE_TAXI;
+        return board.Blocks[ESCAPE_Y * BOARD_CX + ESCAPE_X] == VEHICLE_TAXI;
     }
 
     /// <summary>
@@ -381,14 +390,12 @@ class Program
         {
             for (var x = 0; x < BOARD_CX; x++)
             {
-                var v = board.Blocks[x, y];
+                var v = board.Blocks[y * BOARD_CX + x];
                 if (v != VEHICLE_NONE)
                 {
-                    if (v == vehicle)
-                    {
-                    }
-
-                    newBoard.Blocks[x + (v == vehicle ? dx : 0), y + (v == vehicle ? dy : 0)] = v;
+                    var nx = x + (v == vehicle ? dx : 0);
+                    var ny = y + (v == vehicle ? dy : 0);
+                    newBoard.Blocks[ny * BOARD_CX + nx] = v;
                 }
             }
         }
@@ -442,14 +449,14 @@ class Program
     /// <returns></returns>
     static bool IsBoardIdenticalTo(Board board1, Board board2)
     {
-        for (var y = 0; y < BOARD_CY; y++)
+        // expect that for an array this small, this is faster than options like SequenceEqual
+        var b1 = board1.Blocks;
+        var b2 = board2.Blocks;
+        for (var i = 0; i < BOARD_CY * BOARD_CX; i++)
         {
-            for (var x = 0; x < BOARD_CX; x++)
+            if (b1[i] != b2[i])
             {
-                if (board1.Blocks[x, y] != board2.Blocks[x, y])
-                {
-                    return false;
-                }
+                return false;
             }
         }
 
@@ -540,7 +547,7 @@ class Program
         {
             for (var x = 0; x < BOARD_CX; x++)
             {
-                var v = board.Blocks[x, y];
+                var v = board.Blocks[y * BOARD_CX + x];
                 if (v == VEHICLE_NONE)
                 {
                     Console.Write("\u001b[48;2;32;32;32m   \u001b[0m");
