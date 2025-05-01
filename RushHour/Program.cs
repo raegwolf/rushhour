@@ -161,17 +161,20 @@ class Program
             if (IsSolved(board))
             {
                 var testSolution = GetPrunedSteps(board);
-                Console.WriteLine($"Found solution using {testSolution.Count()} moves.");
                 if ((bestSolution.Count() == 0) || (testSolution.Count() < bestSolution.Count()))
                 {
+                    Console.WriteLine($"Found new best solution using {testSolution.Count()} moves.");
                     bestSolution = testSolution;
                 }
                 continue;
             }
 
-            var newBoards = EnumerateNextBoards(board);
+            var newBoards = EnumerateNextBoards(board, encountered);
 
-            ProcessBoards(stack, encountered, newBoards);
+            foreach (var newBoard in newBoards)
+            {
+                stack.Push(newBoard);
+            }
 
             p++;
             if ((p % 10000) == 0)
@@ -185,40 +188,13 @@ class Program
     }
 
     /// <summary>
-    /// Iterates throguh a set of potential boards and loads them into the stack if they are a
-    /// unique state (i.e. a configuration that has not yet been seen)
-    /// </summary>
-    /// <param name="stack"></param>
-    /// <param name="encountered"></param>
-    /// <param name="newBoards"></param>
-    static void ProcessBoards(Stack<Board> stack, HashSet<string> encountered, IEnumerable<Board> newBoards)
-    {
-        foreach (var newBoard in newBoards)
-        {
-            // if the board is identical to an antecedent, exclude it
-            if (IsBoardIdenticalToAntecedent(newBoard))
-            {
-                continue;
-            }
-
-            // if the boad is identical to any other board we've already seen, exclude it
-            if (IsBoardIdenticalTo(newBoard, encountered))
-            {
-                continue;
-            }
-
-            stack.Push(newBoard);
-        }
-    }
-
-    /// <summary>
     /// Returns all boards that represent valid next states (i.e. each one contains a valid move)
     /// </summary>
     /// <param name="board"></param>
     /// <returns></returns>
-    static IEnumerable<Board> EnumerateNextBoards(Board board)
+    static IEnumerable<Board> EnumerateNextBoards(Board board, HashSet<string> encounteredBoards)
     {
-        var encountered = new bool[VEHICLE_MAX];
+        var encounteredVehicle = new bool[VEHICLE_MAX];
 
         for (int y = 0; y < BOARD_CY; y++)
         {
@@ -232,11 +208,11 @@ class Program
                 }
 
                 // if we've already processed this vehicle, skip
-                if (encountered[current])
+                if (encounteredVehicle[current])
                 {
                     continue;
                 }
-                encountered[current] = true;
+                encounteredVehicle[current] = true;
 
                 // determine whether to scan to the left/right or updards/downwards.
                 // all vehicles are at least 2 blocks long and since we are scanning top down
@@ -252,7 +228,10 @@ class Program
                 if (canMovePos)
                 {
                     var newBoard = CloneBoardMoveVehicle(board, current, dx, dy);
-                    yield return newBoard;
+                    if (!encounteredBoards.Contains(newBoard.ToString()))
+                    {
+                        yield return newBoard;
+                    }
                 }
 
                 // test for delta -1 - i.e. left or up
@@ -260,7 +239,10 @@ class Program
                 if (canMoveNeg)
                 {
                     var newBoard = CloneBoardMoveVehicle(board, current, -dx, -dy);
-                    yield return newBoard;
+                    if (!encounteredBoards.Contains(newBoard.ToString()))
+                    {
+                        yield return newBoard;
+                    }
                 }
             }
         }
@@ -394,26 +376,6 @@ class Program
     }
 
     /// <summary>
-    /// Return true if the board is identical to any board it is descended from
-    /// </summary>
-    /// <param name="board"></param>
-    /// <returns></returns>
-    static bool IsBoardIdenticalToAntecedent(Board board)
-    {
-        Board parentBoard = board.ParentBoard;
-        while (parentBoard != null)
-        {
-            if (IsBoardIdenticalTo(board, parentBoard))
-            {
-                return true;
-            }
-            parentBoard = parentBoard.ParentBoard;
-        }
-
-        return false;
-    }
-
-    /// <summary>
     /// Returns true if the board has an identical state to any of the other boards in others
     /// </summary>
     /// <param name="self"></param>
@@ -422,29 +384,6 @@ class Program
     static bool IsBoardIdenticalTo(Board self, HashSet<string> others)
     {
         return others.Contains(self.ToString());
-    }
-
-    /// <summary>
-    /// Returns true if the two boards contain identical state
-    /// </summary>
-    /// <param name="board1"></param>
-    /// <param name="board2"></param>
-    /// <returns></returns>
-    static bool IsBoardIdenticalTo(Board board1, Board board2)
-    {
-        // Linq's SequenceEqual is 50% slower for arrays this size.
-        // an unsafe array compare also achieved slighly worse perf
-        var b1 = board1.Blocks;
-        var b2 = board2.Blocks;
-        for (var i = 0; i < BOARD_CY * BOARD_CX; i++)
-        {
-            if (b1[i] != b2[i])
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     /// <summary>
