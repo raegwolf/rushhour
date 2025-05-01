@@ -8,22 +8,24 @@ using System.Text;
 class Program
 {
     static string[] INITIAL_BOARD_TEXT = {
-        "abccd ",
-        "abe df",
-        "a ezzf",
-        "gggh f",
-        "  ihjj",
-        "kkill "
+        "OABBC ",
+        "OAD CP",
+        "O DXXP",
+        "QQQE P",
+        "  FEGG",
+        "HHFII "
     };
 
-    static string[] INITIAL_BOARD_TEXT1 = {
-        "abccdf",
-        "abe df",
-        "a ezzf",
-        "gggh  ",
-        "  ihjj",
-        "kki ll"
-    };
+    const string VEHICLE_CODES = " XOABCDPQEFGHI";
+
+    const int VEHICLE_NONE = 0;
+    const int VEHICLE_TAXI = 1;
+    const int VEHICLE_OTHER_BASE = 2;
+
+    // when we have red taxi at these coordinates we've solved the puzzle
+    const int ESCAPE_X = 5;
+    const int ESCAPE_Y = 2;
+
 
     const int BOARD_CX = 6;
     const int BOARD_CY = 6;
@@ -45,29 +47,22 @@ class Program
         ConsoleColor.DarkYellow
     };
 
-    static readonly string[] ANSI_COLOURS = {
-        "\u001b[30m", // Black       
-        "\u001b[38;2;139;0;0m", // Red         
-        "\u001b[33m", // Yellow      
-        "\u001b[32m", // Green       
-        "\u001b[38;2;255;165;0m", //Orange
-        "\u001b[36m", // Cyan        
-        "\u001b[38;2;231;84;128m", // Pink
-        "\u001b[35;1m", // Magenta    
-        "\u001b[34m", // Blue   
-        "\u001b[38;2;139;0;139m", // Dark Magenta
-        "\u001b[38;2;0;100;0m", // Dark Green
-        "\u001b[38;2;211;211;211m", // Gray
-        "\u001b[38;2;181;101;29m", // Light Brown
-        "\u001b[38;2;255;255;153m", // Light Yellow
+    static readonly string[] ANSI_BG_COLOURS = {
+        "\u001b[40m", // Black (background)
+        "\u001b[48;2;139;0;0m", // Red (background)
+        "\u001b[43m", // Yellow (background)
+        "\u001b[42m", // Green (background)
+        "\u001b[48;2;255;165;0m", // Orange (background)
+        "\u001b[46m", // Cyan (background)
+        "\u001b[48;2;231;84;128m", // Pink (background)
+        "\u001b[45;1m", // Magenta (bright) background
+        "\u001b[44m", // Blue (background)
+        "\u001b[48;2;139;0;139m", // Dark Magenta (background)
+        "\u001b[48;2;0;100;0m", // Dark Green (background)
+        "\u001b[48;2;211;211;211m", // Gray (background)
+        "\u001b[48;2;181;101;29m", // Light Brown (background)
+        "\u001b[48;2;255;255;153m", // Light Yellow (background)
     };
-
-    const int VEHICLE_NONE = 0;
-    const int VEHICLE_TAXI = 1;
-
-    // when we have red taxi at these coordinates we've solved the puzzle
-    const int ESCAPE_X = 5;
-    const int ESCAPE_Y = 2;
 
     class Board
     {
@@ -104,8 +99,6 @@ class Program
 
     static void Main()
     {
-        var is1Move = IsOneMoveAwayFrom(CreateInitialBoard(INITIAL_BOARD_TEXT), CreateInitialBoard(INITIAL_BOARD_TEXT1));
-
         var initial = CreateInitialBoard(INITIAL_BOARD_TEXT);
 
         RenderBoard(0, initial);
@@ -208,17 +201,10 @@ class Program
                 var n = 0;
                 var v = boardText[y][x];
 
-                if (v == ' ')
+                n = VEHICLE_CODES.IndexOf(v);
+                if (n == -1)
                 {
-                    n = VEHICLE_NONE;
-                }
-                else if (v == 'z')
-                {
-                    n = VEHICLE_TAXI;
-                }
-                else
-                {
-                    n = v - ((int)'a') + 2;
+                    throw new Exception("Invalid vehicle.");
                 }
                 board.Blocks[x, y] = n;
             }
@@ -557,13 +543,14 @@ class Program
                 var v = board.Blocks[x, y];
                 if (v == VEHICLE_NONE)
                 {
-                    Console.Write("   ");
+                    Console.Write("\u001b[48;2;32;32;32m   \u001b[0m");
                     continue;
                 }
+                Console.Write(ANSI_BG_COLOURS[v % ANSI_BG_COLOURS.Length]);
+                var letter = VEHICLE_CODES[v];
+                Console.Write($"{letter}{letter}");
 
-                //Console.ForegroundColor = COLOURS[v]; // doesn't work on integrated vscode terminal on mac
-                Console.Write(ANSI_COLOURS[v % ANSI_COLOURS.Length]);
-                Console.Write("▉▉ ");
+                Console.Write("\u001b[48;2;32;32;32m \u001b[0m");
             }
             Console.WriteLine();
         }
