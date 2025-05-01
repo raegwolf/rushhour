@@ -157,7 +157,7 @@ class Program
             p++;
             if ((p % 10000) == 0)
             {
-                Console.WriteLine($"Iteration {p}, Stack {stack.Count()}, Encountered {encountered.Count} unique states.");
+                Console.WriteLine($"Processed {p} unique states, Stack {stack.Count()}.");
             }
         }
 
