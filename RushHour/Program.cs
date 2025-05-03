@@ -35,7 +35,7 @@ class Program
         "QQQI P"
     };
 
-    const string VEHICLE_CODES = " XOABCDPQEFGHI";
+    const string VEHICLE_CODES = " XABCDEFGHIJKOPQR";
 
     const int VEHICLE_NONE = 0;
     const int VEHICLE_TAXI = 1;
@@ -53,18 +53,22 @@ class Program
     static readonly string[] ANSI_BG_COLOURS = {
         "\u001b[40m", // Black (background)
         "\u001b[48;2;139;0;0m", // Red (background)
-        "\u001b[43m", // Yellow (background)
         "\u001b[42m", // Green (background)
         "\u001b[48;2;255;165;0m", // Orange (background)
         "\u001b[46m", // Cyan (background)
         "\u001b[48;2;231;84;128m", // Pink (background)
-        "\u001b[45;1m", // Magenta (bright) background
-        "\u001b[44m", // Blue (background)
-        "\u001b[48;2;139;0;139m", // Dark Magenta (background)
+        "\u001b[48;2;75;0;130m", // Indigo (background)
         "\u001b[48;2;0;100;0m", // Dark Green (background)
-        "\u001b[48;2;211;211;211m", // Gray (background)
+        "\u001b[48;2;211;211;211m", // Light Gray (background)
         "\u001b[48;2;181;101;29m", // Light Brown (background)
         "\u001b[48;2;255;255;153m", // Light Yellow (background)
+        "\u001b[48;2;101;67;33m", // Dark Brown (background)
+        "\u001b[48;2;80;120;90m", // Pond Green (background)
+        "\u001b[43m", // Yellow (background)
+        "\u001b[48;2;139;0;139m", // Dark Magenta (background)
+        "\u001b[44m", // Blue (background)
+        "\u001b[48;2;0;168;107m", // Jade (background)
+        "\u001b[48;2;0;168;107m" // Jade (background)
     };
 
     class Board
@@ -373,17 +377,6 @@ class Program
         }
 
         return newBoard;
-    }
-
-    /// <summary>
-    /// Returns true if the board has an identical state to any of the other boards in others
-    /// </summary>
-    /// <param name="self"></param>
-    /// <param name="others"></param>
-    /// <returns></returns>
-    static bool IsBoardIdenticalTo(Board self, HashSet<string> others)
-    {
-        return others.Contains(self.ToString());
     }
 
     /// <summary>
