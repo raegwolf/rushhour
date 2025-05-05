@@ -174,11 +174,22 @@ class Program
                 continue;
             }
 
-            var newBoards = EnumerateNextBoards(board, encountered);
+            var newBoards = EnumerateNextBoards(board);
 
             foreach (var newBoard in newBoards)
             {
-                stack.Push(newBoard);
+                var newBoardKey = newBoard.ToString();
+
+                // if we've already seen this board state with fewer steps, there is no need to
+                // process this board
+                if (encountered.ContainsKey(newBoardKey) && (encountered[newBoardKey] <= newBoard.Step))
+                {
+                    continue;
+                }
+
+                encountered[newBoard.ToString()] = newBoard.Step;
+
+                queue.Enqueue(newBoard);
             }
 
             p++;
@@ -197,7 +208,7 @@ class Program
     /// </summary>
     /// <param name="board"></param>
     /// <returns></returns>
-    static IEnumerable<Board> EnumerateNextBoards(Board board, HashSet<string> encounteredBoards)
+    static IEnumerable<Board> EnumerateNextBoards(Board board)
     {
         var encounteredVehicle = new bool[VEHICLE_MAX];
 
@@ -232,22 +243,14 @@ class Program
                 var canMovePos = CanMove(board, current, x, y, dx, dy);
                 if (canMovePos)
                 {
-                    var newBoard = CloneBoardMoveVehicle(board, current, dx, dy);
-                    if (!encounteredBoards.Contains(newBoard.ToString()))
-                    {
-                        yield return newBoard;
-                    }
+                    yield return CloneBoardMoveVehicle(board, current, dx, dy);
                 }
 
                 // test for delta -1 - i.e. left or up
                 var canMoveNeg = CanMove(board, current, x, y, -dx, -dy);
                 if (canMoveNeg)
                 {
-                    var newBoard = CloneBoardMoveVehicle(board, current, -dx, -dy);
-                    if (!encounteredBoards.Contains(newBoard.ToString()))
-                    {
-                        yield return newBoard;
-                    }
+                    yield return CloneBoardMoveVehicle(board, current, -dx, -dy);
                 }
             }
         }
@@ -481,7 +484,5 @@ class Program
 
         Console.WriteLine();
     }
-
-
 
 }
