@@ -140,6 +140,7 @@ class Program
 
     }
 
+
     /// <summary>
     /// Attempts to solve the game and returns the best solution (i.e. the one with the
     /// fewest steps taken)
@@ -148,19 +149,19 @@ class Program
     /// <returns></returns>
     static List<Board> SolveGame(Board initialBoard)
     {
-        var stack = new Stack<Board>();
+        var queue = new Queue<Board>();
 
-        stack.Push(initialBoard);
+        queue.Enqueue(initialBoard);
 
         var bestSolution = new List<Board>();
 
-        var encountered = new HashSet<string>();
+        var encountered = new Dictionary<string, int>();
 
         var p = 0;
-        while (stack.Count() > 0)
+        while (queue.Count() > 0)
         {
-            var board = stack.Pop();
-            encountered.Add(board.ToString());
+            var board = queue.Dequeue();
+
 
             if (IsSolved(board))
             {
@@ -183,7 +184,7 @@ class Program
             p++;
             if ((p % 10000) == 0)
             {
-                Console.WriteLine($"Processed {p} unique states, stack depth is {stack.Count()}.");
+                Console.WriteLine($"Processed {p} unique states, queue size is {queue.Count()}, step depth is {board.Step}.");
             }
         }
 
@@ -480,5 +481,7 @@ class Program
 
         Console.WriteLine();
     }
+
+
 
 }
