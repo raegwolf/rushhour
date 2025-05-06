@@ -1,10 +1,4 @@
-﻿
-using System;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Text;
+﻿using System.Diagnostics;
 
 class Program
 {
@@ -49,6 +43,8 @@ class Program
 
     const int BOARD_CX = 6;
     const int BOARD_CY = 6;
+
+    const int BOARD_MAX_MOVE = 4;// max blocks for a move
 
     static readonly string[] ANSI_BG_COLOURS = {
         "\u001b[40m", // Black (background)
@@ -137,9 +133,7 @@ class Program
         }
 
         return board;
-
     }
-
 
     /// <summary>
     /// Attempts to solve the game and returns the best solution (i.e. the one with the
@@ -162,10 +156,9 @@ class Program
         {
             var board = queue.Dequeue();
 
-
             if (IsSolved(board))
             {
-                var testSolution = GetPrunedSteps(board);
+                var testSolution = GetStepsToBoard(board);
                 if ((bestSolution.Count() == 0) || (testSolution.Count() < bestSolution.Count()))
                 {
                     Console.WriteLine($"Found new best solution using {testSolution.Count()} moves.");
@@ -210,128 +203,113 @@ class Program
     /// <returns></returns>
     static IEnumerable<Board> EnumerateNextBoards(Board board)
     {
-        var encounteredVehicle = new bool[VEHICLE_MAX];
+        var encountered = new bool[VEHICLE_MAX];
 
         for (int y = 0; y < BOARD_CY; y++)
         {
             for (int x = 0; x < BOARD_CX; x++)
             {
-                var current = board.Blocks[y * BOARD_CX + x];
-                if (current == VEHICLE_NONE)
+                var vehicle = board.Blocks[y * BOARD_CX + x];
+                if (vehicle == VEHICLE_NONE)
                 {
                     // skip empty blocks
                     continue;
                 }
 
                 // if we've already processed this vehicle, skip
-                if (encounteredVehicle[current])
+                if (encountered[vehicle])
                 {
                     continue;
                 }
-                encounteredVehicle[current] = true;
+                encountered[vehicle] = true;
 
-                // determine whether to scan to the left/right or updards/downwards.
-                // all vehicles are at least 2 blocks long and since we are scanning top down
-                // and left right, we know whether the vehicle is horizontal or vertical
-                // by testing the block to the right and the block below. note that this 
-                // just determines the orientation of the vehicle not whether there
-                // is actually space for it to move
-                var dx = x + 1 < BOARD_CX ? (board.Blocks[y * BOARD_CX + x + 1] == current ? 1 : 0) : 0;
-                var dy = y + 1 < BOARD_CY ? (board.Blocks[(y + 1) * BOARD_CX + x] == current ? 1 : 0) : 0;
+                // determine vehicle orientation
+                var isHorizontal = (x + 1 < BOARD_CX) && (board.Blocks[y * BOARD_CX + x + 1] == vehicle);
 
-                // test for delta +1 - i.e. right or down
-                var canMovePos = CanMove(board, current, x, y, dx, dy);
-                if (canMovePos)
+                var moves = GetAvailableMoves(
+                    board,
+                    vehicle,
+                    isHorizontal ? BOARD_MAX_MOVE : 0,
+                    isHorizontal ? 0 : BOARD_MAX_MOVE);
+
+                foreach (var move in moves)
                 {
-                    yield return CloneBoardMoveVehicle(board, current, dx, dy);
-                }
-
-                // test for delta -1 - i.e. left or up
-                var canMoveNeg = CanMove(board, current, x, y, -dx, -dy);
-                if (canMoveNeg)
-                {
-                    yield return CloneBoardMoveVehicle(board, current, -dx, -dy);
+                    yield return CloneBoardMoveVehicle(board, vehicle, move.dx, move.dy);
                 }
             }
         }
     }
 
-    /// <summary>
-    /// Returns true if the given vehicle can be moved (dx, dy)
-    /// </summary>
-    /// <param name="board"></param>
-    /// <param name="vehicle"></param>
-    /// <param name="x"></param>
-    /// <param name="y"></param>
-    /// <param name="dx"></param>
-    /// <param name="dy"></param>
-    /// <returns></returns>
-    static bool CanMove(Board board, int vehicle, int x, int y, int dx, int dy)
+    static IEnumerable<(int dx, int dy)> GetAvailableMoves(Board board, byte vehicle, int maxX, int maxY)
     {
-        if ((dx == 0) && (dy == 0))
-        {
-            return false;
-        }
+        var moves = new List<(int dx, int dy)>();
 
-        // find the next adjacent cell that isn't this vehicle
-        var adjacent = vehicle;
-        while (adjacent == vehicle)
-        {
-            adjacent = board.Blocks[y * BOARD_CX + x];
-            if (adjacent == VEHICLE_NONE)
-            {
-                return true;
-            }
+        moves.AddRange(GetAvailableMoves(
+            board,
+            vehicle,
+            maxX == 0 ? 0 : 1,
+            maxY == 0 ? 0 : 1,
+            maxX,
+            maxY));
+        moves.AddRange(GetAvailableMoves(
+            board,
+            vehicle,
+            maxX == 0 ? 0 : -1,
+            maxY == 0 ? 0 : -1,
+            -maxX,
+            -maxY));
 
-            x += dx;
-            y += dy;
-
-            if ((x < 0) || (x >= BOARD_CX) || (y < 0) || (y >= BOARD_CY))
-            {
-                return false;
-            }
-        }
-
-        return false;
+        return moves;
     }
 
-    /// <summary>
-    /// Returns true if board2 is 1 valid step away from board1 (i.e. a single
-    /// move would change the state of board1 so that it is equivalent to board2)
-    /// </summary>
-    /// <param name="board1"></param>
-    /// <param name="board2"></param>
-    /// <returns></returns>
-    static bool IsOneMoveAwayFrom(Board board1, Board board2)
+    static IEnumerable<(int dx, int dy)> GetAvailableMoves(Board board, byte vehicle, int dx, int dy, int tx, int ty)
     {
-        var movedVehicle = VEHICLE_NONE;
-        var moveCount = 0;
 
+        var cx = dx;
+        var cy = dy;
+
+        do
+        {
+            if (!IsValidMove(board, vehicle, cx, cy))
+            {
+                yield break;
+            }
+
+            yield return (cx, cy);
+
+            cx += dx;
+            cy += dy;
+        } while ((cx != tx)| (cy != ty));
+
+    }
+
+    static bool IsValidMove(Board board, byte vehicle, int dx, int dy)
+    {
         for (var y = 0; y < BOARD_CY; y++)
         {
             for (var x = 0; x < BOARD_CX; x++)
             {
-                var isChanged = board1.Blocks[y * BOARD_CX + x] != board2.Blocks[y * BOARD_CX + x];
-                if (!isChanged)
+                var v = board.Blocks[y * BOARD_CX + x];
+
+                // if the current block is not the vehicle, ignore it
+                if (v != vehicle)
                 {
                     continue;
                 }
 
-                var vehicle1 = board1.Blocks[y * BOARD_CX + x];
-                var vehicle2 = board2.Blocks[y * BOARD_CX + x];
-
-                var testVehicle = vehicle1 == VEHICLE_NONE ? vehicle2 : vehicle1;
-
-                // if we have already identified which vehicle was moved in a previous block,
-                // the vehicle in this block must match
-                if ((movedVehicle != VEHICLE_NONE) && (testVehicle != movedVehicle))
+                // if the block is out of bounds, it's not valid
+                if ((x + dx < 0) ||
+                    (x + dx >= BOARD_CX) ||
+                    (y + dy < 0) ||
+                   (y + dy >= BOARD_CY))
                 {
                     return false;
                 }
 
-                movedVehicle = testVehicle;
-                moveCount++;
-                if (moveCount > 2)
+                // if the target block is not either empty or the same vehicle, it's not valid
+                var tv = board.Blocks[(y + dy) * BOARD_CX + (x + dx)];
+
+                if ((tv != VEHICLE_NONE) && (tv != vehicle))
                 {
                     return false;
                 }
@@ -388,49 +366,18 @@ class Program
     /// </summary>
     /// <param name="finalStep"></param>
     /// <returns></returns>
-    static List<Board> GetPrunedSteps(Board finalStep)
+    static List<Board> GetStepsToBoard(Board finalStep)
     {
-        if (finalStep == null)
-        {
-            return null;
-        }
+        var board = finalStep;
+        List<Board> steps = new();
 
-        var currentStep = finalStep;
-        var steps = new List<Board>();
-        while (currentStep != null)
+        while (board != null)
         {
-            steps.Add(currentStep);
-            currentStep = currentStep.ParentBoard;
+            steps.Add(board);
+            board = board.ParentBoard;
         }
-
         steps.Reverse();
-
-        var prunedSteps = new List<Board>();
-
-        var i = 0;
-        while (i < steps.Count() - 1)
-        {
-            prunedSteps.Add(steps[i]);
-
-            // walk backwards from the last step to the current step to find the highest 
-            // step that represents a single change from the current step. we can safely
-            // prune all the intermediate steps because they're not actually progressing 
-            // the solution. for example, they're unneccessary oscillations of vehicles
-            for (var j = steps.Count() - 1; j > i; j--)
-            {
-                var isOneMove = IsOneMoveAwayFrom(steps[i], steps[j]);
-                if (isOneMove)
-                {
-                    i = j;
-                    break;
-                }
-            }
-        }
-
-        // add the last step
-        prunedSteps.Add(steps[steps.Count() - 1]);
-
-        return prunedSteps;
+        return steps;
     }
 
     /// <summary>
